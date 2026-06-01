@@ -87,6 +87,9 @@ jobs:
         with:
           flutter-version: "3.x"
 
+      - name: Configure for Web
+        run: flutter create . --platforms web --project-name khasm
+
       - name: Install dependencies
         run: flutter pub get
 

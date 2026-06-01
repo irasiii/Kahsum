@@ -100,6 +100,10 @@ jobs:
         with:
           terraform_version: "1.9"
 
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ${{ env.TF_DIR }}
+
       - name: Download plan
         uses: actions/download-artifact@v4
         with:
