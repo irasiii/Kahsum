@@ -2,7 +2,7 @@ name: Deploy Static Sites
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     paths:
       - "apps/web/**"
       - "apps/flutter_app/**"

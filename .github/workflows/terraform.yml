@@ -2,7 +2,7 @@ name: Terraform
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     paths:
       - "infra/terraform/**"
       - ".github/workflows/terraform.yml"
@@ -66,7 +66,7 @@ jobs:
 
   apply:
     name: Terraform Apply
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: plan
     runs-on: ubuntu-latest
     permissions:
