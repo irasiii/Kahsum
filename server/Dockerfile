@@ -9,7 +9,7 @@ RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
-RUN apk add --no-cache openssl && \
+RUN apk add --no-cache openssl curl && \
     addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 appuser
 COPY --from=builder /app/package*.json ./
