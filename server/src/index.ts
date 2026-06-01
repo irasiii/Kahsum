@@ -31,8 +31,13 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
+  } catch (e) {
+    res.json({ status: 'degraded', db: 'disconnected', timestamp: new Date().toISOString() });
+  }
 });
 
 import authRoutes from './routes/auth';

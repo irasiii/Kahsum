@@ -10,6 +10,7 @@ router.get('/', async (_req: Request, res: Response) => {
     });
     res.json({ categories });
   } catch (error) {
+    console.error('Categories error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
