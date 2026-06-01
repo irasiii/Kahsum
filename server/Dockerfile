@@ -17,6 +17,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/src/prompts ./dist/prompts
+RUN printf '#!/bin/sh\nset -e\necho "Running migrations..."\nnpx prisma migrate deploy\necho "Starting server..."\nexec node dist/index.js\n' > /entrypoint.sh && chmod +x /entrypoint.sh
 USER appuser
 EXPOSE 3000
-CMD ["node", "dist/index.js"]
+ENTRYPOINT ["/entrypoint.sh"]
