@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  type          UserType
+  name          String
+  email         String   @unique
+  phone         String   @unique
+  passwordHash  String   @map("password_hash")
+  language      String   @default("ar")
+  fcmToken      String?  @map("fcm_token")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  traderProfile  TraderProfile?
+  claims         Claim[]
+  ratingsGiven   Rating[]          @relation("ConsumerRatings")
+  ratingsReceived Rating[]         @relation("TraderRatings")
+  notifications  Notification[]
+  aiPriceLogs    AiPriceLog[]
+
+  @@map("users")
+}
+
+model TraderProfile {
+  userId       String   @id @map("user_id")
+  businessName String   @map("business_name")
+  categoryId   Int      @map("category_id")
+  address      String?
+  lat          Float?
+  lng          Float?
+  logoUrl      String?  @map("logo_url")
+  ratingAvg    Float    @default(0) @map("rating_avg")
+  ratingCount  Int      @default(0) @map("rating_count")
+
+  user       User       @relation(fields: [userId], references: [id])
+  category   Category   @relation(fields: [categoryId], references: [id])
+  deals      Deal[]
+  payments   Payment[]
+
+  @@map("trader_profiles")
+}
+
+model Category {
+  id             Int      @id @default(autoincrement())
+  slug           String   @unique
+  nameEn         String   @map("name_en")
+  nameAr         String   @map("name_ar")
+  icon           String
+  groupEn        String   @map("group_en")
+  groupAr        String   @map("group_ar")
+  isGulfExclusive Boolean @default(false) @map("is_gulf_exclusive")
+  sortOrder      Int      @default(0) @map("sort_order")
+
+  traders  TraderProfile[]
+  deals    Deal[]
+  priceCaches PriceCache[]
+
+  @@map("categories")
+}
+
+model Deal {
+  id              String   @id @default(uuid())
+  traderId        String   @map("trader_id")
+  categoryId      Int      @map("category_id")
+  titleAr         String   @map("title_ar")
+  titleEn         String   @map("title_en")
+  descriptionAr   String?  @map("description_ar")
+  descriptionEn   String?  @map("description_en")
+  discountPct     Float    @map("discount_pct")
+  originalPrice   Float    @map("original_price")
+  imageUrl        String?  @map("image_url")
+  maxRedemptions  Int      @default(0) @map("max_redemptions")
+  redeemedCount   Int      @default(0) @map("redeemed_count")
+  expiryDate      DateTime @map("expiry_date")
+  tier            DealTier @default(basic)
+  status          DealStatus @default(active)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  trader     TraderProfile @relation(fields: [traderId], references: [userId])
+  category   Category      @relation(fields: [categoryId], references: [id])
+  claims     Claim[]
+  payments   Payment[]
+  aiPriceLogs AiPriceLog[]
+
+  @@map("deals")
+}
+
+model Claim {
+  id         String   @id @default(uuid())
+  dealId     String   @map("deal_id")
+  consumerId String   @map("consumer_id")
+  qrToken    String   @unique @map("qr_token")
+  status     ClaimStatus @default(claimed)
+  claimedAt  DateTime @default(now()) @map("claimed_at")
+  redeemedAt DateTime? @map("redeemed_at")
+
+  deal     Deal    @relation(fields: [dealId], references: [id])
+  consumer User    @relation(fields: [consumerId], references: [id])
+  rating   Rating?
+
+  @@map("claims")
+}
+
+model Rating {
+  id         String   @id @default(uuid())
+  claimId    String   @unique @map("claim_id")
+  traderId   String   @map("trader_id")
+  consumerId String   @map("consumer_id")
+  stars      Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  claim    Claim @relation(fields: [claimId], references: [id])
+  trader   User  @relation("TraderRatings", fields: [traderId], references: [id])
+  consumer User  @relation("ConsumerRatings", fields: [consumerId], references: [id])
+
+  @@map("ratings")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String
+  messageAr String   @map("message_ar")
+  messageEn String   @map("message_en")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model Payment {
+  id        String     @id @default(uuid())
+  traderId  String     @map("trader_id")
+  dealId    String     @map("deal_id")
+  amount    Float
+  tier      DealTier
+  status    PaymentStatus @default(pending)
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  trader TraderProfile @relation(fields: [traderId], references: [userId])
+  deal   Deal          @relation(fields: [dealId], references: [id])
+
+  @@map("payments")
+}
+
+model PriceCache {
+  id              String   @id @default(uuid())
+  productName     String   @map("product_name")
+  categoryId      Int      @map("category_id")
+  marketPriceMin  Float?   @map("market_price_min")
+  marketPriceMax  Float?   @map("market_price_max")
+  marketPriceAvg  Float?   @map("market_price_avg")
+  verdict         String?
+  confidence      String?
+  sources         Json?
+  rawResponse     Json?    @map("raw_response")
+  createdAt       DateTime @default(now()) @map("created_at")
+  expiresAt       DateTime @map("expires_at")
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@map("price_cache")
+}
+
+model AiPriceLog {
+  id                     String   @id @default(uuid())
+  dealId                 String?  @map("deal_id")
+  traderId               String   @map("trader_id")
+  traderPrice            Float    @map("trader_price")
+  traderDiscountPct      Float    @map("trader_discount_pct")
+  aiSuggestedPrice       Float?   @map("ai_suggested_price")
+  aiVerdict              String?  @map("ai_verdict")
+  traderAcceptedSuggestion Boolean? @map("trader_accepted_suggestion")
+  finalPostedPrice       Float?   @map("final_posted_price")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  trader User  @relation(fields: [traderId], references: [id])
+  deal   Deal? @relation(fields: [dealId], references: [id])
+
+  @@map("ai_price_logs")
+}
+
+enum UserType {
+  consumer
+  trader
+}
+
+enum DealTier {
+  basic
+  standard
+  premium
+}
+
+enum DealStatus {
+  active
+  expired
+  paused
+}
+
+enum ClaimStatus {
+  claimed
+  redeemed
+  expired
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+}
