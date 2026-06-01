@@ -46,6 +46,20 @@ jobs:
         with:
           terraform_version: "1.9"
 
+      - name: Generate tfvars
+        run: |
+          cat > ${{ env.TF_DIR }}/environments/${{ github.event.inputs.environment || 'staging' }}.tfvars << 'EOF'
+          environment      = "${{ github.event.inputs.environment || 'staging' }}"
+          db_instance_class = "db.t3.micro"
+          ecs_cpu           = 256
+          ecs_memory        = 512
+          ecs_desired_count = 1
+          jwt_secret        = "${{ secrets.JWT_SECRET }}"
+          anthropic_api_key = ""
+          apify_api_key     = ""
+          domain_name       = ""
+          EOF
+
       - name: Terraform Init
         run: terraform init
         working-directory: ${{ env.TF_DIR }}
