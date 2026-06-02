@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'app.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
@@ -33,7 +34,7 @@ void main() async {
 
 Future<Locale?> _getSavedLocale() async {
   try {
-    final storage = await const FlutterSecureStorage().read(key: 'app_language');
+    final storage = await FlutterSecureStorage().read(key: 'app_language');
     if (storage == 'en') return const Locale('en');
     return const Locale('ar');
   } catch (_) {
