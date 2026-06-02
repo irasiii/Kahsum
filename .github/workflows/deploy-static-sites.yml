@@ -20,6 +20,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
 
 jobs:
   deploy-nextjs:
@@ -51,15 +52,14 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          NEXT_PUBLIC_API_URL: https://api.khasm-${{ github.event.inputs.environment || 'staging' }}.example.com
+          NEXT_PUBLIC_API_URL: https://api.khasm-${ENVIRONMENT}.example.com
 
       - name: Deploy to S3
-        run: |
-          aws s3 sync out/ s3://khasm-${{ github.event.inputs.environment || 'staging' }}-nextjs --delete
+        run: aws s3 sync out/ s3://khasm-${ENVIRONMENT}-nextjs --delete
 
       - name: Invalidate CloudFront
         run: |
-          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, 'khasm-${{ github.event.inputs.environment || 'staging' }}-nextjs')].Id" --output text)
+          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, 'khasm-${ENVIRONMENT}-nextjs')].Id" --output text)
           if [ -n "$DISTRIBUTION_ID" ]; then
             aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
           fi
@@ -100,12 +100,11 @@ jobs:
         run: flutter build web --release
 
       - name: Deploy to S3
-        run: |
-          aws s3 sync build/web/ s3://khasm-${{ github.event.inputs.environment || 'staging' }}-flutter-web --delete
+        run: aws s3 sync build/web/ s3://khasm-${ENVIRONMENT}-flutter-web --delete
 
       - name: Invalidate CloudFront
         run: |
-          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, 'khasm-${{ github.event.inputs.environment || 'staging' }}-flutter-web')].Id" --output text)
+          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, 'khasm-${ENVIRONMENT}-flutter-web')].Id" --output text)
           if [ -n "$DISTRIBUTION_ID" ]; then
             aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
           fi

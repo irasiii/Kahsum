@@ -15,7 +15,7 @@ resource "aws_s3_bucket_ownership_controls" "flutter_web" {
 }
 
 resource "aws_s3_bucket_public_access_block" "flutter_web" {
-  bucket = aws_s3_bucket.flutter_web.id
+  bucket                  = aws_s3_bucket.flutter_web.id
   block_public_acls       = false
   block_public_policy     = false
   ignore_public_acls      = false
@@ -24,14 +24,14 @@ resource "aws_s3_bucket_public_access_block" "flutter_web" {
 
 resource "aws_s3_bucket_policy" "flutter_web" {
   depends_on = [aws_s3_bucket_public_access_block.flutter_web]
-  bucket = aws_s3_bucket.flutter_web.id
+  bucket     = aws_s3_bucket.flutter_web.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = "*"
-      Action = "s3:GetObject"
-      Resource = "${aws_s3_bucket.flutter_web.arn}/*"
+      Action    = "s3:GetObject"
+      Resource  = "${aws_s3_bucket.flutter_web.arn}/*"
     }]
   })
 }
@@ -59,7 +59,7 @@ resource "aws_s3_bucket_ownership_controls" "nextjs_site" {
 }
 
 resource "aws_s3_bucket_public_access_block" "nextjs_site" {
-  bucket = aws_s3_bucket.nextjs_site.id
+  bucket                  = aws_s3_bucket.nextjs_site.id
   block_public_acls       = false
   block_public_policy     = false
   ignore_public_acls      = false
@@ -68,14 +68,14 @@ resource "aws_s3_bucket_public_access_block" "nextjs_site" {
 
 resource "aws_s3_bucket_policy" "nextjs_site" {
   depends_on = [aws_s3_bucket_public_access_block.nextjs_site]
-  bucket = aws_s3_bucket.nextjs_site.id
+  bucket     = aws_s3_bucket.nextjs_site.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = "*"
-      Action = "s3:GetObject"
-      Resource = "${aws_s3_bucket.nextjs_site.arn}/*"
+      Action    = "s3:GetObject"
+      Resource  = "${aws_s3_bucket.nextjs_site.arn}/*"
     }]
   })
 }
@@ -100,8 +100,8 @@ resource "aws_cloudfront_distribution" "flutter_web" {
   price_class         = "PriceClass_100"
 
   origin {
-    domain_name              = aws_s3_bucket_website_configuration.flutter_web.website_endpoint
-    origin_id                = "flutter-web"
+    domain_name = aws_s3_bucket_website_configuration.flutter_web.website_endpoint
+    origin_id   = "flutter-web"
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -111,11 +111,11 @@ resource "aws_cloudfront_distribution" "flutter_web" {
   }
 
   default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "flutter-web"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "flutter-web"
     viewer_protocol_policy = "redirect-to-https"
-    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
   }
 
   custom_error_response {
@@ -160,8 +160,8 @@ resource "aws_cloudfront_distribution" "nextjs_site" {
   price_class         = "PriceClass_100"
 
   origin {
-    domain_name              = aws_s3_bucket_website_configuration.nextjs_site.website_endpoint
-    origin_id                = "nextjs-site"
+    domain_name = aws_s3_bucket_website_configuration.nextjs_site.website_endpoint
+    origin_id   = "nextjs-site"
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -171,11 +171,11 @@ resource "aws_cloudfront_distribution" "nextjs_site" {
   }
 
   default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "nextjs-site"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "nextjs-site"
     viewer_protocol_policy = "redirect-to-https"
-    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
   }
 
   restrictions {

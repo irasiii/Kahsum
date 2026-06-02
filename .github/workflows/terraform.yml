@@ -23,6 +23,7 @@ on:
 env:
   AWS_REGION: us-east-1
   TF_DIR: infra/terraform
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
 
 jobs:
   plan:
@@ -48,34 +49,37 @@ jobs:
 
       - name: Generate tfvars
         run: |
-          cat > ${{ env.TF_DIR }}/environments/${{ github.event.inputs.environment || 'staging' }}.tfvars << 'EOF'
-          environment      = "${{ github.event.inputs.environment || 'staging' }}"
+          cat > $TF_DIR/environments/$ENVIRONMENT.tfvars << 'EOF'
+          environment      = "$ENVIRONMENT"
           db_instance_class = "db.t3.micro"
           ecs_cpu           = 256
           ecs_memory        = 512
           ecs_desired_count = 1
-          jwt_secret        = "${{ secrets.JWT_SECRET }}"
+          jwt_secret        = "$JWT_SECRET"
+          cloudinary_cloud_name = ""
+          cloudinary_api_key    = ""
+          cloudinary_api_secret = ""
           anthropic_api_key = ""
           apify_api_key     = ""
           domain_name       = ""
           EOF
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
       - name: Terraform Init
-        run: terraform init -backend-config=environments/backend-${{ github.event.inputs.environment || 'staging' }}.hcl
+        run: terraform init -backend-config=environments/backend-${ENVIRONMENT}.hcl -reconfigure
         working-directory: ${{ env.TF_DIR }}
 
       - name: Terraform Plan
         id: plan
-        run: |
-          terraform plan \
-            -var-file=environments/${{ github.event.inputs.environment || 'staging' }}.tfvars \
-            -out=tfplan
+        run: terraform plan -var-file=environments/${ENVIRONMENT}.tfvars -out=tfplan
         working-directory: ${{ env.TF_DIR }}
 
       - name: Upload plan
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-${{ github.event.inputs.environment || 'staging' }}
+          name: tfplan-${{ env.ENVIRONMENT }}
           path: ${{ env.TF_DIR }}/tfplan
 
   apply:
@@ -100,32 +104,15 @@ jobs:
         with:
           terraform_version: "1.9"
 
-      - name: Terraform Init
-        run: terraform init -backend-config=environments/backend-${{ github.event.inputs.environment || 'staging' }}.hcl
-        working-directory: ${{ env.TF_DIR }}
-
       - name: Download plan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ github.event.inputs.environment || 'staging' }}
+          name: tfplan-${{ env.ENVIRONMENT }}
           path: ${{ env.TF_DIR }}
 
-      - name: Generate tfvars
-        run: |
-          cat > ${{ env.TF_DIR }}/environments/${{ github.event.inputs.environment || 'staging' }}.tfvars << 'EOF'
-          environment      = "${{ github.event.inputs.environment || 'staging' }}"
-          db_instance_class = "db.t3.micro"
-          ecs_cpu           = 256
-          ecs_memory        = 512
-          ecs_desired_count = 1
-          jwt_secret        = "${{ secrets.JWT_SECRET }}"
-          cloudinary_cloud_name = ""
-          cloudinary_api_key    = ""
-          cloudinary_api_secret = ""
-          anthropic_api_key = ""
-          apify_api_key     = ""
-          domain_name       = ""
-          EOF
+      - name: Terraform Init
+        run: terraform init -backend-config=environments/backend-${ENVIRONMENT}.hcl -reconfigure
+        working-directory: ${{ env.TF_DIR }}
 
       - name: Terraform Apply
         run: terraform apply tfplan
