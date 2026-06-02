@@ -61,7 +61,7 @@ jobs:
           EOF
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -backend-config=environments/backend-${{ github.event.inputs.environment || 'staging' }}.hcl
         working-directory: ${{ env.TF_DIR }}
 
       - name: Terraform Plan
@@ -75,13 +75,13 @@ jobs:
       - name: Upload plan
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan
+          name: tfplan-${{ github.event.inputs.environment || 'staging' }}
           path: ${{ env.TF_DIR }}/tfplan
 
   apply:
     name: Terraform Apply
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: plan
+    if: github.ref_name == 'master' || github.ref_name == 'main'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -101,14 +101,31 @@ jobs:
           terraform_version: "1.9"
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -backend-config=environments/backend-${{ github.event.inputs.environment || 'staging' }}.hcl
         working-directory: ${{ env.TF_DIR }}
 
       - name: Download plan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan
+          name: tfplan-${{ github.event.inputs.environment || 'staging' }}
           path: ${{ env.TF_DIR }}
+
+      - name: Generate tfvars
+        run: |
+          cat > ${{ env.TF_DIR }}/environments/${{ github.event.inputs.environment || 'staging' }}.tfvars << 'EOF'
+          environment      = "${{ github.event.inputs.environment || 'staging' }}"
+          db_instance_class = "db.t3.micro"
+          ecs_cpu           = 256
+          ecs_memory        = 512
+          ecs_desired_count = 1
+          jwt_secret        = "${{ secrets.JWT_SECRET }}"
+          cloudinary_cloud_name = ""
+          cloudinary_api_key    = ""
+          cloudinary_api_secret = ""
+          anthropic_api_key = ""
+          apify_api_key     = ""
+          domain_name       = ""
+          EOF
 
       - name: Terraform Apply
         run: terraform apply tfplan

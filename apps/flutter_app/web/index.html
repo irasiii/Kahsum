@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="description" content="Khasm - اكتشف أفضل العروض في السعودية">
+  <title>Khasm - خصم</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="favicon.ico">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/flutter_service_worker.js');
+      });
+    }
+  </script>
+</head>
+<body>
+  <script src="flutter.js" defer></script>
+  <div id="loading" style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;background:#fff">
+    <div style="font-size:48px;margin-bottom:16px">🛍️</div>
+    <div style="font-family:sans-serif;font-size:18px;color:#666">Khasm</div>
+  </div>
+</body>
+</html>

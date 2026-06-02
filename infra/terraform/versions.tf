@@ -14,7 +14,7 @@ terraform {
 
   backend "s3" {
     bucket         = "khasm-terraform-state"
-    key            = "terraform.tfstate"
+    key            = "staging/terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true
     dynamodb_table = "khasm-terraform-locks"
