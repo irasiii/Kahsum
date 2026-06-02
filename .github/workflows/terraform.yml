@@ -49,7 +49,7 @@ jobs:
 
       - name: Generate tfvars
         run: |
-          cat > $TF_DIR/environments/$ENVIRONMENT.tfvars << 'EOF'
+          cat > $TF_DIR/environments/$ENVIRONMENT.tfvars << EOF
           environment      = "$ENVIRONMENT"
           db_instance_class = "db.t3.micro"
           ecs_cpu           = 256
