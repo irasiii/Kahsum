@@ -108,3 +108,34 @@ jobs:
           if [ -n "$DISTRIBUTION_ID" ]; then
             aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
           fi
+
+  build-apk:
+    name: Build Flutter APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/flutter_app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.x"
+
+      - name: Restore original pubspec.yaml
+        run: git checkout -- pubspec.yaml
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: khasm-apk
+          path: apps/flutter_app/build/app/outputs/flutter-apk/app-release.apk
