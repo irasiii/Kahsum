@@ -132,7 +132,7 @@ jobs:
         run: |
           rm -rf android/
           flutter create --platforms android .
-          git checkout -- pubspec.yaml lib/ test/
+          git checkout -- pubspec.yaml lib/
 
       - name: Install dependencies
         run: flutter pub get
