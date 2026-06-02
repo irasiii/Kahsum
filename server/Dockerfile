@@ -17,7 +17,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/src/prompts ./dist/prompts
-RUN printf '#!/bin/sh\nset -e\necho "Running migrations..."\nnpx prisma migrate deploy\necho "Starting server..."\nexec node dist/index.js\n' > /entrypoint.sh && chmod +x /entrypoint.sh
+COPY --from=builder /app/src/seed.ts ./src/seed.ts
+RUN printf '#!/bin/sh\nset -e\nif [ "$1" = "seed" ]; then\n  echo "Running seed..."\n  cd /app && npx tsx src/seed.ts\n  exit $?\nfi\necho "Running migrations..."\nnpx prisma migrate deploy\necho "Starting server..."\nexec node dist/index.js\n' > /entrypoint.sh && chmod +x /entrypoint.sh
 USER appuser
 EXPOSE 3000
 ENTRYPOINT ["/entrypoint.sh"]
