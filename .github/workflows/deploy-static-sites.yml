@@ -128,6 +128,12 @@ jobs:
       - name: Restore original pubspec.yaml
         run: git checkout -- pubspec.yaml
 
+      - name: Regenerate Android platform files
+        run: |
+          rm -rf android/
+          flutter create --platforms android .
+          git checkout -- pubspec.yaml lib/ test/
+
       - name: Install dependencies
         run: flutter pub get
 
