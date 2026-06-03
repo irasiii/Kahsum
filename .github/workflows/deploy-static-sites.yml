@@ -152,6 +152,8 @@ jobs:
           done
           echo "=== Verified ==="
           grep -rn "compileSdk[[:space:]]*=" . --include="build.gradle*" | grep -v ".gradle/"
+
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
