@@ -58,7 +58,6 @@ jobs:
   build-root-web:
     name: Build Root Web
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('web/**') != '' }}
 
     defaults:
       run:
