@@ -142,16 +142,49 @@ jobs:
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" 2>/dev/null || true
           yes | $ANDROID_HOME/tools/bin/sdkmanager "platforms;android-35" 2>/dev/null || true
 
-      - name: Patch compileSdk -> 35 everywhere
+      - name: Fix compileSdk/minSdk/targetSdk in generated build.gradle.kts
         run: |
-          find . -name "build.gradle*" -path "*/android/*" -type f | while read f; do
-            echo "--- $f ---"
-            sed -E -i 's/flutter\.(compileSdk|compileSdkVersion)[^)]*\)/35/g' "$f"
-            sed -E -i 's/flutter\.(minSdk|minSdkVersion)[^)]*\)/21/g' "$f"
-            sed -E -i 's/flutter\.(targetSdk|targetSdkVersion)[^)]*\)/35/g' "$f"
-          done
+          cat > android/app/build.gradle.kts << 'KTS'
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("dev.flutter.flutter-gradle-plugin")
+}
+
+android {
+    namespace = "com.khasm.app"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.khasm.app"
+        minSdk = 21
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.0"
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
+flutter {
+    source = "../.."
+}
+KTS
           echo "=== Verified ==="
-          grep -rn "compileSdk[[:space:]]*=" . --include="build.gradle*" | grep -v ".gradle/"
+          grep -n "compileSdk\|minSdk\|targetSdk" android/app/build.gradle.kts
 
       - name: Set up Java
         uses: actions/setup-java@v4
