@@ -55,58 +55,36 @@ jobs:
           name: flutter-web-build
           path: apps/flutter_app/build/web
 
-  build-root-web:
-    name: Build Root Web
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: web
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Upload root web artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: root-web-files
-          path: web
-
   deploy:
-    name: Deploy Artifacts
+    name: Deploy to S3/CloudFront
     runs-on: ubuntu-latest
     needs:
       - build-flutter-web
-      - build-root-web
     if: ${{ always() && needs.build-flutter-web.result == 'success' }}
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Download Flutter web artifact
         uses: actions/download-artifact@v4
         with:
           name: flutter-web-build
-          path: deploy/flutter
+          path: deploy
 
-      - name: Download root web artifact
-        if: ${{ needs.build-root-web.result == 'success' }}
-        uses: actions/download-artifact@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: root-web-files
-          path: deploy/root-web
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-1
 
-      - name: Show deployed files
+      - name: Deploy to S3
         run: |
-          echo "Flutter web files:"
-          find deploy/flutter -maxdepth 3 -type f | sort || true
-          echo
-          echo "Root web files:"
-          find deploy/root-web -maxdepth 3 -type f | sort || true
+          aws s3 sync deploy/ s3://khasm-${ENVIRONMENT:-staging}-flutter-web --delete
 
-      - name: Deployment placeholder
+      - name: Invalidate CloudFront
         run: |
-          echo "Add your real deployment command here."
-          echo "Examples:"
-          echo "- aws s3 sync deploy/flutter s3://your-bucket/"
-          echo "- rsync/scp to server"
-          echo "- upload to Cloudflare Pages / Firebase Hosting / Netlify"
+          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, 'khasm-${ENVIRONMENT:-staging}-flutter-web')].Id" --output text)
+          if [ -n "$DISTRIBUTION_ID" ]; then
+            aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+          fi
