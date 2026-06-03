@@ -99,16 +99,17 @@ jobs:
         run: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses 2>/dev/null || yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
       - name: Install dependencies
         run: flutter pub get
-      - name: Fix compileSdk in all plugin modules
+      - name: Fix compileSdk in app + all plugin modules
         run: |
-          find ~/.pub-cache -name "build.gradle.kts" -path "*/android/*" -type f 2>/dev/null | while read f; do
-            sed -i 's/compileSdk [0-9][0-9]*/compileSdk 36/g' "$f"
+          sed -i 's/flutter\.compileSdkVersion/36/g' android/app/build.gradle.kts
+          find ~/.pub-cache -name "build.gradle*" -path "*/android/*" -type f 2>/dev/null | while read f; do
+            sed -i 's/compileSdk[[:space:]]*=[[:space:]]*[0-9][0-9]*/compileSdk = 36/g' "$f"
             sed -i 's/compileSdkVersion[[:space:]]*=[[:space:]]*[0-9][0-9]*/compileSdkVersion = 36/g' "$f"
           done
-          echo "Patched plugin compileSdk values"
-          grep -rn "compileSdk [0-9]" ~/.pub-cache --include="build.gradle*" 2>/dev/null || true
-      - name: Build APK
+      - name: Clean + Build APK
         run: |
+          flutter clean
+          flutter pub get
           set +e
           flutter build apk --release > build.log 2>&1
           exit_code=$?
