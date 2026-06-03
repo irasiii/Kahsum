@@ -55,6 +55,75 @@ jobs:
           name: flutter-web-build
           path: apps/flutter_app/build/web
 
+  build-apk:
+    name: Build Flutter APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/flutter_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Restore original pubspec.yaml
+        run: git checkout -- pubspec.yaml
+      - name: Regenerate Android platform files
+        run: |
+          rm -rf android/
+          flutter create --platforms android .
+          git checkout -- pubspec.yaml lib/
+      - name: Ensure asset directories exist
+        run: mkdir -p assets/images assets/icons
+      - name: Install Android SDK platform 35
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" 2>/dev/null || true
+          yes | $ANDROID_HOME/tools/bin/sdkmanager "platforms;android-35" 2>/dev/null || true
+      - name: Patch Android Gradle SDK values
+        run: |
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/flutter\.compileSdkVersion/35/g' android/app/build.gradle.kts
+            sed -i 's/flutter\.minSdkVersion/21/g' android/app/build.gradle.kts
+            sed -i 's/flutter\.targetSdkVersion/35/g' android/app/build.gradle.kts
+          fi
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+      - name: Set ANDROID_HOME
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+      - name: Accept Android licenses
+        run: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses 2>/dev/null || yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Build APK
+        run: |
+          set +e
+          flutter build apk --release > build.log 2>&1
+          exit_code=$?
+          echo "Exit code: $exit_code"
+          if [ $exit_code -ne 0 ]; then
+            echo "### Build failed - full log:" >> $GITHUB_STEP_SUMMARY
+            cat build.log >> $GITHUB_STEP_SUMMARY
+          fi
+          exit $exit_code
+        shell: bash
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: khasm-apk-build-log
+          path: apps/flutter_app/build.log
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: khasm-apk
+          path: apps/flutter_app/build/app/outputs/flutter-apk/app-release.apk
+
   deploy:
     name: Deploy to S3/CloudFront
     runs-on: ubuntu-latest
