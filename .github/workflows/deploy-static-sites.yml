@@ -134,19 +134,36 @@ jobs:
           flutter create --platforms android .
           git checkout -- pubspec.yaml lib/
 
-      - name: Enable Android platform
-        run: flutter config --enable-android
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set ANDROID_HOME
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
 
       - name: Accept Android licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+        run: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses 2>/dev/null || yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK (verbose)
-        run: flutter build apk --release --verbose
+      - name: Build APK
+        run: flutter build apk --release 2>&1 | tee build.log
+        shell: bash
+
+      - name: Upload build logs (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: khasm-apk-build-log
+          path: apps/flutter_app/build.log
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: khasm-apk
