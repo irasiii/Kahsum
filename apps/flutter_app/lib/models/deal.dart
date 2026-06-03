@@ -49,9 +49,9 @@ class Category {
     return Category(
       id: json['id'] as int,
       slug: json['slug'] as String,
-      nameEn: json['nameEn'] as String,
-      nameAr: json['nameAr'] as String,
-      icon: json['icon'] as String,
+      nameEn: json['nameEn'] as String? ?? '',
+      nameAr: json['nameAr'] as String? ?? '',
+      icon: json['icon'] as String? ?? '',
     );
   }
 }
@@ -60,9 +60,9 @@ class Deal {
   final String id;
   final String titleAr;
   final String titleEn;
-  final String descriptionAr;
-  final String descriptionEn;
-  final int discountPct;
+  final String? descriptionAr; // nullable — optional in schema
+  final String? descriptionEn;
+  final double discountPct; // Float in Postgres, never cast as int
   final double originalPrice;
   final String? imageUrl;
   final int maxRedemptions;
@@ -77,8 +77,8 @@ class Deal {
     required this.id,
     required this.titleAr,
     required this.titleEn,
-    required this.descriptionAr,
-    required this.descriptionEn,
+    this.descriptionAr,
+    this.descriptionEn,
     required this.discountPct,
     required this.originalPrice,
     this.imageUrl,
@@ -96,9 +96,9 @@ class Deal {
       id: json['id'] as String,
       titleAr: json['titleAr'] as String,
       titleEn: json['titleEn'] as String,
-      descriptionAr: json['descriptionAr'] as String,
-      descriptionEn: json['descriptionEn'] as String,
-      discountPct: json['discountPct'] as int,
+      descriptionAr: json['descriptionAr'] as String?,
+      descriptionEn: json['descriptionEn'] as String?,
+      discountPct: (json['discountPct'] as num).toDouble(),
       originalPrice: (json['originalPrice'] as num).toDouble(),
       imageUrl: json['imageUrl'] as String?,
       maxRedemptions: json['maxRedemptions'] as int,

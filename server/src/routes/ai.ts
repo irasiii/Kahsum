@@ -7,7 +7,7 @@ const router = Router();
 
 router.post('/price-suggestion', authenticate, requireTrader, async (req: AuthRequest, res: Response) => {
   try {
-    const { productName, categoryId, traderPrice, discountPct, language = 'en' } = req.body;
+    const { productName, categoryId, traderPrice, discountPct, language = 'ar' } = req.body;
 
     if (!productName || !categoryId || !traderPrice) {
       return res.status(400).json({ error: 'productName, categoryId, and traderPrice required' });
@@ -15,21 +15,14 @@ router.post('/price-suggestion', authenticate, requireTrader, async (req: AuthRe
 
     const suggestion = await getPriceSuggestion({
       productName,
-      categoryId,
-      traderPrice,
-      discountPct: discountPct || 0,
+      categoryId: Number(categoryId),
+      traderPrice: Number(traderPrice),
+      discountPct: Number(discountPct) || 0,
       language: language as 'ar' | 'en',
+      traderId: req.userId!,   // ← passed directly; no updateMany needed
     });
 
-    if (!suggestion) {
-      return res.json({ available: false });
-    }
-
-    await prisma.aiPriceLog.updateMany({
-      where: { traderPrice, traderDiscountPct: discountPct || 0, traderId: '' },
-      data: { traderId: req.userId!, dealId: null },
-    });
-
+    if (!suggestion) return res.json({ available: false });
     res.json({ available: true, ...suggestion });
   } catch (error) {
     console.error('AI price suggestion error:', error);
@@ -39,7 +32,10 @@ router.post('/price-suggestion', authenticate, requireTrader, async (req: AuthRe
 
 router.get('/market-value/:dealId', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const lang = (req.headers['accept-language'] as 'ar' | 'en') || 'ar';
+    const lang = (['ar', 'en'].includes(req.headers['accept-language'] as string)
+      ? req.headers['accept-language']
+      : 'ar') as 'ar' | 'en';
+
     const deal = await prisma.deal.findUnique({
       where: { id: req.params.dealId },
       include: { category: true },
@@ -52,11 +48,11 @@ router.get('/market-value/:dealId', optionalAuth, async (req: AuthRequest, res: 
       language: lang,
     });
 
-    if (!marketValue || !marketValue.available) {
-      return res.json({ available: false, status: 'no_data' });
-    }
+    if (!marketValue?.available) return res.json({ available: false, status: 'no_data' });
 
-    const savings = marketValue.marketPriceAvg ? deal.originalPrice - marketValue.marketPriceAvg : null;
+    const savings = marketValue.marketPriceAvg
+      ? deal.originalPrice - marketValue.marketPriceAvg
+      : null;
 
     res.json({
       available: true,

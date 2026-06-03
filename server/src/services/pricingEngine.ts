@@ -10,6 +10,7 @@ interface PriceSuggestionInput {
   traderPrice: number;
   discountPct: number;
   language: 'ar' | 'en';
+  traderId: string;   // ← required; no more empty-string placeholder
 }
 
 interface MarketValueInput {
@@ -18,7 +19,7 @@ interface MarketValueInput {
   language: 'ar' | 'en';
 }
 
-async function getSystemPrompt(): Promise<string> {
+function getSystemPrompt(): string {
   const promptPath = path.join(__dirname, '..', 'prompts', 'pricingSystem.txt');
   return fs.readFileSync(promptPath, 'utf-8');
 }
@@ -46,46 +47,62 @@ async function getInternalHistory(categoryId: number, productName: string) {
     },
     select: { originalPrice: true, discountPct: true },
   });
-
   if (deals.length === 0) return null;
-
   const total = deals.length;
   const avgPrice = deals.reduce((s, d) => s + d.originalPrice, 0) / total;
   const avgDiscount = deals.reduce((s, d) => s + d.discountPct, 0) / total;
-
-  return { averagePrice: Math.round(avgPrice * 100) / 100, averageDiscount: Math.round(avgDiscount * 100) / 100, totalDeals: total };
+  return {
+    averagePrice: Math.round(avgPrice * 100) / 100,
+    averageDiscount: Math.round(avgDiscount * 100) / 100,
+    totalDeals: total,
+  };
 }
+
+// ── Public API ────────────────────────────────────────────────────────────────
 
 export async function getPriceSuggestion(input: PriceSuggestionInput) {
   try {
+    // Cache hit — build full response without hitting scrapers or AI
     const cached = await getCachedPrice(input.productName, input.categoryId);
     if (cached && cached.verdict) {
+      // Still log this check (traderId is now correct)
+      await prisma.aiPriceLog.create({
+        data: {
+          traderId: input.traderId,
+          traderPrice: input.traderPrice,
+          traderDiscountPct: input.discountPct,
+          aiSuggestedPrice: cached.marketPriceAvg,
+          aiVerdict: cached.verdict,
+          finalPostedPrice: null,
+        },
+      }).catch(() => {/* non-fatal */});
       return formatResponse(cached, input);
     }
 
+    // Scrape + AI in parallel (scrapers have their own timeout)
     const [noonPrices, amazonPrices, history] = await Promise.all([
       apifyClient.scrapeNoon(input.productName).catch(() => null),
       apifyClient.scrapeAmazon(input.productName).catch(() => null),
       getInternalHistory(input.categoryId, input.productName),
     ]);
 
-    const systemPrompt = await getSystemPrompt();
+    const systemPrompt = getSystemPrompt();
     const userPrompt = {
       productName: input.productName,
       traderPrice: input.traderPrice,
       discountPct: input.discountPct,
-      noonPrices: noonPrices || [],
-      amazonPrices: amazonPrices || [],
-      historicalAvg: history?.averagePrice || null,
+      noonPrices: noonPrices ?? [],
+      amazonPrices: amazonPrices ?? [],
+      historicalAvg: history?.averagePrice ?? null,
       currency: 'SAR',
       language: input.language,
     };
 
     const aiResult = await claudeClient.analyzePrice(systemPrompt, userPrompt);
 
+    // Persist cache (6-hour TTL)
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 6);
-
     await prisma.priceCache.create({
       data: {
         productName: input.productName,
@@ -95,22 +112,23 @@ export async function getPriceSuggestion(input: PriceSuggestionInput) {
         marketPriceAvg: aiResult.marketPriceAvg,
         verdict: aiResult.verdict,
         confidence: aiResult.confidenceScore,
-        sources: aiResult.sources || [],
+        sources: aiResult.sources ?? [],
         rawResponse: aiResult,
         expiresAt,
       },
     });
 
+    // Audit log — traderId is always a real UUID now
     await prisma.aiPriceLog.create({
       data: {
+        traderId: input.traderId,
         traderPrice: input.traderPrice,
         traderDiscountPct: input.discountPct,
         aiSuggestedPrice: aiResult.marketPriceAvg,
         aiVerdict: aiResult.verdict,
-        traderId: '',
         finalPostedPrice: null,
       },
-    });
+    }).catch(() => {/* non-fatal */});
 
     return {
       ...aiResult,
@@ -129,7 +147,7 @@ export async function getMarketValue(input: MarketValueInput) {
   try {
     const cached = await getCachedPrice(input.productName, input.categoryId);
     if (cached && cached.verdict) {
-      return formatBadgeResponse(cached, input);
+      return formatBadgeResponse(cached);
     }
 
     const [noonPrices, amazonPrices, history] = await Promise.all([
@@ -138,25 +156,25 @@ export async function getMarketValue(input: MarketValueInput) {
       getInternalHistory(input.categoryId, input.productName),
     ]);
 
-    const systemPrompt = await getSystemPrompt();
-    const userPrompt = {
+    const systemPrompt = getSystemPrompt();
+    const aiResult = await claudeClient.analyzePrice(systemPrompt, {
       productName: input.productName,
       traderPrice: 0,
       discountPct: 0,
-      noonPrices: noonPrices || [],
-      amazonPrices: amazonPrices || [],
-      historicalAvg: history?.averagePrice || null,
+      noonPrices: noonPrices ?? [],
+      amazonPrices: amazonPrices ?? [],
+      historicalAvg: history?.averagePrice ?? null,
       currency: 'SAR',
       language: input.language,
-    };
-
-    const aiResult = await claudeClient.analyzePrice(systemPrompt, userPrompt);
-    return formatBadgeResponseFromAI(aiResult, input);
+    });
+    return formatBadgeResponseFromAI(aiResult);
   } catch (error) {
     console.error('Market value error:', error);
     return null;
   }
 }
+
+// ── Formatters ────────────────────────────────────────────────────────────────
 
 function formatResponse(cached: any, input: PriceSuggestionInput) {
   return {
@@ -170,19 +188,17 @@ function formatResponse(cached: any, input: PriceSuggestionInput) {
     discountLabel: cached.verdict === 'honest'
       ? (input.language === 'ar' ? 'خصم حقيقي' : 'Genuine discount')
       : (input.language === 'ar' ? 'خصم مبالغ فيه' : 'Exaggerated discount'),
-    confidenceScore: cached.confidence || 'medium',
+    confidenceScore: cached.confidence ?? 'medium',
     confidenceLabel: getConfidenceLabel(cached.confidence, input.language),
-    sources: cached.sources || [],
+    sources: cached.sources ?? [],
     suggestion: input.language === 'ar'
       ? `متوسط سعر السوق لهذا المنتج في السعودية هو ${cached.marketPriceAvg} ريال.`
       : `The average market price for this product in KSA is ${cached.marketPriceAvg} SAR.`,
   };
 }
 
-function formatBadgeResponse(cached: any, input: MarketValueInput) {
-  if (!cached.marketPriceAvg) {
-    return { available: false };
-  }
+function formatBadgeResponse(cached: any) {
+  if (!cached.marketPriceAvg) return { available: false };
   return {
     available: true,
     verdict: cached.verdict,
@@ -194,10 +210,8 @@ function formatBadgeResponse(cached: any, input: MarketValueInput) {
   };
 }
 
-function formatBadgeResponseFromAI(aiResult: any, _input: MarketValueInput) {
-  if (!aiResult || !aiResult.marketPriceAvg) {
-    return { available: false };
-  }
+function formatBadgeResponseFromAI(aiResult: any) {
+  if (!aiResult?.marketPriceAvg) return { available: false };
   return {
     available: true,
     verdict: aiResult.verdict,
@@ -205,9 +219,11 @@ function formatBadgeResponseFromAI(aiResult: any, _input: MarketValueInput) {
     marketPriceMin: aiResult.marketPriceMin,
     marketPriceMax: aiResult.marketPriceMax,
     confidence: aiResult.confidenceScore,
-    sources: aiResult.sources || [],
+    sources: aiResult.sources ?? [],
   };
 }
+
+// ── Label helpers ─────────────────────────────────────────────────────────────
 
 function getVerdictLabel(verdict: string, lang: 'ar' | 'en'): string {
   const labels: Record<string, Record<string, string>> = {
@@ -215,7 +231,7 @@ function getVerdictLabel(verdict: string, lang: 'ar' | 'en'): string {
     slightly_inflated: { ar: 'مبالغ قليلاً', en: 'Slightly inflated' },
     inflated: { ar: 'مبالغ فيه', en: 'Inflated' },
   };
-  return labels[verdict]?.[lang] || verdict;
+  return labels[verdict]?.[lang] ?? verdict;
 }
 
 function getDiscountLabel(verdict: string, lang: 'ar' | 'en'): string {
@@ -223,7 +239,7 @@ function getDiscountLabel(verdict: string, lang: 'ar' | 'en'): string {
     genuine: { ar: 'خصم حقيقي', en: 'Genuine discount' },
     exaggerated: { ar: 'خصم مبالغ فيه', en: 'Exaggerated discount' },
   };
-  return labels[verdict]?.[lang] || verdict;
+  return labels[verdict]?.[lang] ?? verdict;
 }
 
 function getConfidenceLabel(confidence: string, lang: 'ar' | 'en'): string {
@@ -232,5 +248,5 @@ function getConfidenceLabel(confidence: string, lang: 'ar' | 'en'): string {
     medium: { ar: 'ثقة متوسطة', en: 'Medium confidence' },
     low: { ar: 'ثقة منخفضة', en: 'Low confidence' },
   };
-  return labels[confidence]?.[lang] || confidence;
+  return labels[confidence]?.[lang] ?? confidence;
 }

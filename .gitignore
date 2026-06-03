@@ -24,3 +24,5 @@ coverage/
 .pub/
 .pub-cache/
 flutter_*.png
+.flutter-plugins*
+
