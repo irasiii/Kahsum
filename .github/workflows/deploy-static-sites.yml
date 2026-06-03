@@ -146,9 +146,9 @@ jobs:
         run: |
           find . -name "build.gradle*" -path "*/android/*" -type f | while read f; do
             echo "--- $f ---"
-            sed -i 's/flutter\.compileSdk/35/g' "$f"
-            sed -i 's/flutter\.minSdk/21/g' "$f"
-            sed -i 's/flutter\.targetSdk/35/g' "$f"
+            sed -E -i 's/flutter\.(compileSdk|compileSdkVersion)[^)]*\)/35/g' "$f"
+            sed -E -i 's/flutter\.(minSdk|minSdkVersion)[^)]*\)/21/g' "$f"
+            sed -E -i 's/flutter\.(targetSdk|targetSdkVersion)[^)]*\)/35/g' "$f"
           done
           echo "=== Verified ==="
           grep -rn "compileSdk[[:space:]]*=" . --include="build.gradle*" | grep -v ".gradle/"
