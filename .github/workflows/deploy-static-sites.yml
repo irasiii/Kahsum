@@ -2,192 +2,112 @@ name: Deploy Static Sites
 
 on:
   push:
-    branches: [main, master]
-    paths:
-      - "apps/web/**"
-      - "apps/flutter_app/**"
-      - ".github/workflows/deploy-static-sites.yml"
+    branches:
+      - master
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Target environment"
-        required: true
-        default: "staging"
-        type: choice
-        options:
-          - staging
-          - production
-
-env:
-  AWS_REGION: us-east-1
-  ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
 
 jobs:
-  deploy-nextjs:
-    name: Build & Deploy Next.js Site
+  build-flutter-web:
+    name: Build Flutter Web
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    defaults:
-      run:
-        working-directory: apps/web
 
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build
-        run: npm run build
-        env:
-          NEXT_PUBLIC_API_URL: https://api.khasm-${ENVIRONMENT}.example.com
-
-      - name: Deploy to S3
-        run: aws s3 sync out/ s3://khasm-${ENVIRONMENT}-nextjs --delete
-
-      - name: Invalidate CloudFront
-        run: |
-          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, 'khasm-${ENVIRONMENT}-nextjs')].Id" --output text)
-          if [ -n "$DISTRIBUTION_ID" ]; then
-            aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
-          fi
-
-  deploy-flutter:
-    name: Build & Deploy Flutter Web
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     defaults:
       run:
         working-directory: apps/flutter_app
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.x"
-
-      - name: Restore original pubspec.yaml
-        run: git checkout -- pubspec.yaml
-
-      - name: Enable web platform
-        run: flutter config --enable-web
+          channel: stable
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Flutter Web
+      - name: Ensure Flutter platforms exist
+        run: |
+          flutter config --enable-web
+          flutter create --platforms=web,android .
+
+      - name: Patch Android Gradle Kotlin DSL SDK values
+        run: |
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/flutter\.compileSdkVersion/35/g' android/app/build.gradle.kts
+            sed -i 's/flutter\.minSdkVersion/21/g' android/app/build.gradle.kts
+            sed -i 's/flutter\.targetSdkVersion/35/g' android/app/build.gradle.kts
+            echo "Patched android/app/build.gradle.kts"
+            echo "-----"
+            grep -nE 'compileSdk|minSdk|targetSdk' android/app/build.gradle.kts || true
+            echo "-----"
+          else
+            echo "android/app/build.gradle.kts not found, skipping patch"
+          fi
+
+      - name: Build Flutter web
         run: flutter build web --release
 
-      - name: Deploy to S3
-        run: aws s3 sync build/web/ s3://khasm-${ENVIRONMENT}-flutter-web --delete
+      - name: Upload Flutter web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-build
+          path: apps/flutter_app/build/web
 
-      - name: Invalidate CloudFront
-        run: |
-          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, 'khasm-${ENVIRONMENT}-flutter-web')].Id" --output text)
-          if [ -n "$DISTRIBUTION_ID" ]; then
-            aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
-          fi
-
-  build-apk:
-    name: Build Flutter APK
+  build-root-web:
+    name: Build Root Web
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    if: ${{ hashFiles('web/**') != '' }}
+
     defaults:
       run:
-        working-directory: apps/flutter_app
+        working-directory: web
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.x"
-
-      - name: Restore original pubspec.yaml
-        run: git checkout -- pubspec.yaml
-
-      - name: Regenerate Android platform files
-        run: |
-          rm -rf android/
-          flutter create --platforms android .
-          git checkout -- pubspec.yaml lib/
-
-      - name: Ensure asset directories exist
-        run: mkdir -p assets/images assets/icons
-
-      - name: Install Android SDK platform 35
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" 2>/dev/null || true
-          yes | $ANDROID_HOME/tools/bin/sdkmanager "platforms;android-35" 2>/dev/null || true
-
-      - name: Fix compileSdk/minSdk/targetSdk in generated build.gradle.kts
-        run: |
-          printf 'plugins {\n    id("com.android.application")\n    id("org.jetbrains.kotlin.android")\n    id("dev.flutter.flutter-gradle-plugin")\n}\n\nandroid {\n    namespace = "com.khasm.app"\n    compileSdk = 35\n\n    defaultConfig {\n        applicationId = "com.khasm.app"\n        minSdk = 21\n        targetSdk = 35\n        versionCode = 1\n        versionName = "1.0"\n    }\n\n    buildTypes {\n        release {\n            signingConfig = signingConfigs.getByName("debug")\n        }\n    }\n\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n\n    kotlin {\n        compilerOptions {\n            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)\n        }\n    }\n}\n\nflutter {\n    source = "../.."\n}\n' > android/app/build.gradle.kts
-          echo "=== Verified ==="
-          grep -n "compileSdk\|minSdk\|targetSdk" android/app/build.gradle.kts
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
-
-      - name: Set ANDROID_HOME
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
-
-      - name: Accept Android licenses
-        run: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses 2>/dev/null || yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build APK
-        run: |
-          set +e
-          flutter build apk --release > build.log 2>&1
-          exit_code=$?
-          echo "Exit code: $exit_code"
-          if [ $exit_code -ne 0 ]; then
-            echo "### Build failed - full log:" >> $GITHUB_STEP_SUMMARY
-            cat build.log >> $GITHUB_STEP_SUMMARY
-          fi
-          exit $exit_code
-        shell: bash
-
-      - name: Upload build logs (always)
-        if: always()
+      - name: Upload root web artifact
         uses: actions/upload-artifact@v4
         with:
-          name: khasm-apk-build-log
-          path: apps/flutter_app/build.log
+          name: root-web-files
+          path: web
 
-      - name: Upload APK
-        if: success()
-        uses: actions/upload-artifact@v4
+  deploy:
+    name: Deploy Artifacts
+    runs-on: ubuntu-latest
+    needs:
+      - build-flutter-web
+      - build-root-web
+    if: ${{ always() && needs.build-flutter-web.result == 'success' }}
+
+    steps:
+      - name: Download Flutter web artifact
+        uses: actions/download-artifact@v4
         with:
-          name: khasm-apk
-          path: apps/flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          name: flutter-web-build
+          path: deploy/flutter
+
+      - name: Download root web artifact
+        if: ${{ needs.build-root-web.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: root-web-files
+          path: deploy/root-web
+
+      - name: Show deployed files
+        run: |
+          echo "Flutter web files:"
+          find deploy/flutter -maxdepth 3 -type f | sort || true
+          echo
+          echo "Root web files:"
+          find deploy/root-web -maxdepth 3 -type f | sort || true
+
+      - name: Deployment placeholder
+        run: |
+          echo "Add your real deployment command here."
+          echo "Examples:"
+          echo "- aws s3 sync deploy/flutter s3://your-bucket/"
+          echo "- rsync/scp to server"
+          echo "- upload to Cloudflare Pages / Firebase Hosting / Netlify"
