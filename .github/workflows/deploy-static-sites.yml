@@ -140,18 +140,13 @@ jobs:
       - name: Patch compileSdk -> 35
         run: |
           echo "=== build.gradle content ==="
-          for f in android/app/build.gradle*; do
-            [ -f "$f" ] && echo "--- $f ---" && cat "$f"
-          done
+          cat android/app/build.gradle.kts
           echo "=== Patching ==="
-          for f in android/app/build.gradle*; do
-            [ -f "$f" ] || continue
-            sed -i 's/compileSdk[= ]*/compileSdk = 35/g; s/compileSdkVersion[= ]*/compileSdkVersion = 35/g' "$f"
-            sed -i 's/targetSdk[= ]*/targetSdk = 35/g; s/targetSdkVersion[= ]*/targetSdkVersion = 35/g' "$f"
-            sed -i 's/minSdk[= ]*/minSdk = 21/g; s/minSdkVersion[= ]*/minSdkVersion = 21/g' "$f"
-          done
+          sed -i 's/compileSdk = flutter\.compileSdk\.toInteger()/compileSdk = 35/' android/app/build.gradle.kts
+          sed -i 's/minSdk = flutter\.minSdk\.toInteger()/minSdk = 21/' android/app/build.gradle.kts
+          sed -i 's/targetSdk = flutter\.targetSdk\.toInteger()/targetSdk = 35/' android/app/build.gradle.kts
           echo "=== After patch ==="
-          grep -E "(compileSdk|targetSdk|minSdk)" android/app/build.gradle*
+          grep -E "(compileSdk|targetSdk|minSdk)" android/app/build.gradle.kts
 
       - name: Set up Java
         uses: actions/setup-java@v4
