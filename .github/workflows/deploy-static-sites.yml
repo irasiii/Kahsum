@@ -99,10 +99,14 @@ jobs:
         run: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses 2>/dev/null || yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
       - name: Install dependencies
         run: flutter pub get
-      - name: Override compileSdk for app + all plugin subprojects
+      - name: Patch compileSdk in all downloaded plugin modules
         run: |
-          sed -i 's/flutter\.compileSdkVersion/36/g' android/app/build.gradle.kts
-          printf '\nsubprojects {\n    afterEvaluate {\n        if (plugins.hasPlugin("com.android.library") || plugins.hasPlugin("com.android.application")) {\n            extensions.configure<com.android.build.gradle.BaseExtension> {\n                compileSdkVersion(36)\n            }\n        }\n    }\n}\n' >> android/build.gradle.kts
+          find ~/.pub-cache -name "build.gradle*" -type f 2>/dev/null | while read f; do
+            sed -i 's/^\([[:space:]]*compileSdk[[:space:]]*=[[:space:]]*\)[0-9][0-9]*$/\136/g' "$f" 2>/dev/null || true
+            sed -i 's/^\([[:space:]]*compileSdkVersion[[:space:]]*=[[:space:]]*\)[0-9][0-9]*$/\136/g' "$f" 2>/dev/null || true
+            sed -i 's/^\([[:space:]]*compileSdkVersion[[:space:]]*\)[0-9][0-9]*$/\136/g' "$f" 2>/dev/null || true
+            sed -i 's/compileSdk[[:space:]]*=[[:space:]]*[0-9][0-9]*/compileSdk = 36/g' "$f" 2>/dev/null || true
+          done
       - name: Clean + Build APK
         run: |
           flutter clean
