@@ -22,9 +22,7 @@ class QrDisplayScreen extends ConsumerWidget {
         error: (_, __) =>
             Center(child: Text('errorsGeneral'.tr())),
         data: (claims) {
-          final Claim? claim = claims.cast<Claim?>().firstWhere(
-              (c) => c?.id == claimId,
-              orElse: () => null);
+          final claim = claims.where((c) => c.id == claimId).firstOrNull;
           if (claim == null) {
             return Center(child: Text('errorsGeneral'.tr()));
           }
