@@ -134,13 +134,24 @@ jobs:
           flutter create --platforms android .
           git checkout -- pubspec.yaml lib/
 
-      - name: Patch compileSdk 33 -> 35
+      - name: Ensure asset directories exist
+        run: mkdir -p assets/images assets/icons
+
+      - name: Patch compileSdk -> 35
         run: |
-          sed -i 's/compileSdk [0-9]*/compileSdk 35/g' android/app/build.gradle
-          sed -i 's/targetSdk [0-9]*/targetSdk 35/g' android/app/build.gradle
-          sed -i 's/minSdk [0-9]*/minSdk 21/g' android/app/build.gradle
-          echo "Patched build.gradle:"
-          grep -E "(compileSdk|targetSdk|minSdk)" android/app/build.gradle
+          echo "=== build.gradle content ==="
+          for f in android/app/build.gradle*; do
+            [ -f "$f" ] && echo "--- $f ---" && cat "$f"
+          done
+          echo "=== Patching ==="
+          for f in android/app/build.gradle*; do
+            [ -f "$f" ] || continue
+            sed -i 's/compileSdk[= ]*/compileSdk = 35/g; s/compileSdkVersion[= ]*/compileSdkVersion = 35/g' "$f"
+            sed -i 's/targetSdk[= ]*/targetSdk = 35/g; s/targetSdkVersion[= ]*/targetSdkVersion = 35/g' "$f"
+            sed -i 's/minSdk[= ]*/minSdk = 21/g; s/minSdkVersion[= ]*/minSdkVersion = 21/g' "$f"
+          done
+          echo "=== After patch ==="
+          grep -E "(compileSdk|targetSdk|minSdk)" android/app/build.gradle*
 
       - name: Set up Java
         uses: actions/setup-java@v4
